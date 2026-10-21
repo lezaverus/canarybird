@@ -82,7 +82,7 @@ class EmulatorWindow {
   void SetupGraphicsSystemPresenterPainting();
   void ShutdownGraphicsSystemPresenterPainting();
 
-  void OnEmulatorInitialized();
+  void OnEmulatorInitialized(bool show_dashboard);
 
   xe::X_STATUS RunTitle(const std::filesystem::path& path_to_file);
   void UpdateTitle();
@@ -99,6 +99,7 @@ class EmulatorWindow {
   void ToggleXMPConfigDialog();
   void ToggleConsoleSettingsDialog();
   void ToggleContentListDialog();
+  void ToggleDashboardDialog();
 
   void SetHotkeysState(bool enabled) { disable_hotkeys_ = !enabled; }
 
@@ -304,6 +305,27 @@ class EmulatorWindow {
 
   void ClearDialogs();
 
+ private:
+  class DashboardDialog final : public ui::ImGuiDialog {
+   public:
+    DashboardDialog(ui::ImGuiDrawer* imgui_drawer,
+                    EmulatorWindow& emulator_window)
+        : ui::ImGuiDialog(imgui_drawer), emulator_window_(emulator_window) {}
+
+   protected:
+    void OnDraw(ImGuiIO& io) override;
+    void OnClose() override;
+
+   private:
+    void DrawRecentTitles();
+
+    EmulatorWindow& emulator_window_;
+    int selected_blade_ = 0;
+    char mod_search_query_[256] = {};
+    bool mod_search_query_initialized_ = false;
+  };
+
+ public:
   Emulator* emulator_;
   ui::WindowedAppContext& app_context_;
   EmulatorWindowListener window_listener_;
@@ -323,6 +345,7 @@ class EmulatorWindow {
   std::unique_ptr<DisplayConfigDialog> display_config_dialog_;
   std::unique_ptr<ConsoleSettingsDialog> console_settings_dialog_;
   std::unique_ptr<ContentListDialog> content_list_dialog_;
+  std::unique_ptr<DashboardDialog> dashboard_dialog_;
   // Storing pointers and toggling dialog state is useful for broadcasting
   // messages back to guest.
   std::unique_ptr<ProfileConfigDialog> profile_config_dialog_;

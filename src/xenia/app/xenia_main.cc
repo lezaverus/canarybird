@@ -741,7 +741,9 @@ void EmulatorApp::EmulatorThread() {
 
   // Enable emulator input now that the emulator is properly loaded.
   app_context().CallInUIThread(
-      [this]() { emulator_window_->OnEmulatorInitialized(); });
+      [this]() {
+        emulator_window_->OnEmulatorInitialized(cvars::target.empty());
+      });
 
   // Grab path from the flag or unnamed argument.
   std::filesystem::path path;

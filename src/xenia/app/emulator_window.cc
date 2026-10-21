@@ -7,6 +7,8 @@
  ******************************************************************************
  */
 
+#include <algorithm>
+
 #include "xenia/app/emulator_window.h"
 
 #include "third_party/imgui/imgui.h"
@@ -167,7 +169,28 @@ using namespace xe::hid;
 using namespace xe::gpu;
 
 constexpr std::string_view kRecentlyPlayedTitlesFilename = "recent.toml";
-constexpr std::string_view kBaseTitle = "Xenia-canary";
+constexpr std::string_view kBaseTitle = "Canarybird";
+
+std::string UrlEncodeQuery(std::string_view query) {
+  constexpr char kHexDigits[] = "0123456789ABCDEF";
+  std::string encoded;
+  encoded.reserve(query.size() * 3);
+  for (const char query_character : query) {
+    const unsigned char character =
+        static_cast<unsigned char>(query_character);
+    if ((character >= 'a' && character <= 'z') ||
+        (character >= 'A' && character <= 'Z') ||
+        (character >= '0' && character <= '9') || character == '-' ||
+        character == '_' || character == '.' || character == '~') {
+      encoded.push_back(static_cast<char>(character));
+    } else {
+      encoded.push_back('%');
+      encoded.push_back(kHexDigits[character >> 4]);
+      encoded.push_back(kHexDigits[character & 0x0F]);
+    }
+  }
+  return encoded;
+}
 
 EmulatorWindow::EmulatorWindow(Emulator* emulator,
                                ui::WindowedAppContext& app_context,
@@ -256,7 +279,11 @@ void EmulatorWindow::ShutdownGraphicsSystemPresenterPainting() {
   }
 }
 
-void EmulatorWindow::OnEmulatorInitialized() {
+void EmulatorWindow::OnEmulatorInitialized(bool show_dashboard) {
+  if (show_dashboard) {
+    ToggleDashboardDialog();
+  }
+
   if (!emulator_->kernel_state()
            ->xam_state()
            ->profile_manager()
@@ -757,6 +784,10 @@ bool EmulatorWindow::Initialize() {
   auto zar_menu = MenuItem::Create(MenuItem::Type::kPopup, "&Zar Package");
   FillRecentlyLaunchedTitlesMenu(recent_menu.get());
   {
+    file_menu->AddChild(MenuItem::Create(
+        MenuItem::Type::kString, "&Xbox Dashboard", "F10",
+        std::bind(&EmulatorWindow::ToggleDashboardDialog, this)));
+    file_menu->AddChild(MenuItem::Create(MenuItem::Type::kSeparator));
     file_menu->AddChild(
         MenuItem::Create(MenuItem::Type::kString, "&Open...", "Ctrl+O",
                          std::bind(&EmulatorWindow::FileOpen, this)));
@@ -1122,6 +1153,10 @@ void EmulatorWindow::OnKeyDown(ui::KeyEvent& e) {
 
     case ui::VirtualKey::kF9: {
       RunPreviouslyPlayedTitle();
+    } break;
+
+    case ui::VirtualKey::kF10: {
+      ToggleDashboardDialog();
     } break;
 
     default:
@@ -1721,6 +1756,17 @@ void EmulatorWindow::ToggleContentListDialog() {
     } else {
       content_list_dialog_.reset();
     }
+  }
+}
+
+void EmulatorWindow::ToggleDashboardDialog() {
+  if (!dashboard_dialog_) {
+    dashboard_dialog_ =
+        std::make_unique<DashboardDialog>(imgui_drawer_.get(), *this);
+  } else if (dashboard_dialog_->IsClosing()) {
+    dashboard_dialog_.release();
+  } else {
+    dashboard_dialog_.reset();
   }
 }
 
@@ -2452,6 +2498,10 @@ void EmulatorWindow::AddRecentlyLaunchedTitle(
 }
 
 void EmulatorWindow::ClearDialogs() {
+  if (dashboard_dialog_) {
+    dashboard_dialog_.reset();
+  }
+
   if (profile_config_dialog_) {
     profile_config_dialog_.reset();
   }
@@ -2474,6 +2524,349 @@ void EmulatorWindow::ClearDialogs() {
 
   imgui_drawer_.get()->ClearDialogs();
   emulator_->kernel_state()->xam_state()->is_xam_dialog_present_.store(false);
+}
+
+void EmulatorWindow::DashboardDialog::DrawRecentTitles() {
+  const bool title_open = emulator_window_.emulator()->is_title_open();
+  if (emulator_window_.recently_launched_titles_.empty()) {
+    ImGui::TextDisabled(
+        "No recent games yet. Open a game file to get started.");
+    return;
+  }
+
+  ImGui::BeginDisabled(title_open);
+  for (size_t i = 0; i < emulator_window_.recently_launched_titles_.size();
+       ++i) {
+    const auto& entry = emulator_window_.recently_launched_titles_[i];
+    const std::string title =
+        entry.title_name.empty()
+            ? xe::path_to_utf8(entry.path_to_file.filename())
+            : entry.title_name;
+    ImGui::PushID(static_cast<int>(i));
+    if (ImGui::Button(title.c_str(), ImVec2(-1.0f, 42.0f))) {
+      const auto path = entry.path_to_file;
+      EmulatorWindow* emulator_window = &emulator_window_;
+      emulator_window_.app_context().CallInUIThreadDeferred(
+          [emulator_window, path]() { emulator_window->RunTitle(path); });
+    }
+    ImGui::PopID();
+  }
+  ImGui::EndDisabled();
+}
+
+void EmulatorWindow::DashboardDialog::OnDraw(ImGuiIO&) {
+  constexpr size_t kBladeCount = 6;
+  constexpr const char* kBladeNames[kBladeCount] = {
+      "Home", "Games", "Mods", "Profiles", "System", "Help"};
+  const ImVec4 kBladeColors[kBladeCount] = {
+      ImVec4(0.20f, 0.52f, 0.30f, 1.0f),
+      ImVec4(0.18f, 0.39f, 0.58f, 1.0f),
+      ImVec4(0.51f, 0.35f, 0.20f, 1.0f),
+      ImVec4(0.42f, 0.31f, 0.55f, 1.0f),
+      ImVec4(0.17f, 0.43f, 0.47f, 1.0f),
+      ImVec4(0.49f, 0.38f, 0.20f, 1.0f),
+  };
+
+  const ImGuiViewport* viewport = ImGui::GetMainViewport();
+  ImGui::SetNextWindowPos(viewport->Pos);
+  ImGui::SetNextWindowSize(viewport->Size);
+  ImGui::SetNextWindowViewport(viewport->ID);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(30.0f, 20.0f));
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+  ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 5.0f);
+  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+
+  constexpr ImGuiWindowFlags kWindowFlags =
+      ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+      ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus;
+  if (!ImGui::Begin("Xbox 360 Dashboard##xenia_dashboard", nullptr,
+                    kWindowFlags)) {
+    ImGui::End();
+    ImGui::PopStyleColor();
+    ImGui::PopStyleVar(4);
+    return;
+  }
+
+  const ImVec2 window_pos = ImGui::GetWindowPos();
+  const ImVec2 window_size = ImGui::GetWindowSize();
+  ImDrawList* draw_list = ImGui::GetWindowDrawList();
+  draw_list->AddRectFilledMultiColor(
+      window_pos, ImVec2(window_pos.x + window_size.x,
+                         window_pos.y + window_size.y),
+      IM_COL32(31, 52, 62, 255), IM_COL32(20, 37, 48, 255),
+      IM_COL32(8, 14, 22, 255), IM_COL32(14, 23, 32, 255));
+  draw_list->AddRectFilled(
+      ImVec2(window_pos.x, window_pos.y + 86.0f),
+      ImVec2(window_pos.x + window_size.x, window_pos.y + 88.0f),
+      IM_COL32(111, 183, 111, 210));
+  draw_list->AddCircleFilled(
+      ImVec2(window_pos.x + window_size.x - 60.0f, window_pos.y + 62.0f),
+      170.0f, IM_COL32(80, 152, 104, 18), 48);
+
+  ImGui::SetCursorPos(ImVec2(0.0f, 19.0f));
+  ImGui::PushFont(imgui_drawer()->GetTitleFont());
+  ImGui::TextUnformatted("CANARYBIRD");
+  ImGui::PopFont();
+  ImGui::SameLine();
+  ImGui::SetCursorPosY(28.0f);
+  ImGui::TextDisabled("XENIA CANARY  |  XBOX 360 DASHBOARD");
+  ImGui::SetCursorPosX(window_size.x - 190.0f);
+  ImGui::SetCursorPosY(29.0f);
+  ImGui::TextColored(ImVec4(0.58f, 0.88f, 0.63f, 1.0f),
+                     emulator_window_.emulator()->is_title_open()
+                         ? "GAME RUNNING"
+                         : "READY");
+
+  ImGui::SetCursorPos(ImVec2(0.0f, 101.0f));
+  ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f, 13.0f));
+  const float tab_spacing = 8.0f;
+  constexpr float kBladeCountAsFloat = static_cast<float>(kBladeCount);
+  const float tab_width =
+      (ImGui::GetContentRegionAvail().x -
+       tab_spacing * (kBladeCountAsFloat - 1.0f)) /
+      kBladeCountAsFloat;
+  for (size_t i = 0; i < kBladeCount; ++i) {
+    const ImVec4 base = kBladeColors[i];
+    const ImVec4 selected =
+        i == static_cast<size_t>(selected_blade_)
+            ? ImVec4(std::min(base.x + 0.16f, 1.0f),
+                     std::min(base.y + 0.20f, 1.0f),
+                     std::min(base.z + 0.16f, 1.0f), 1.0f)
+            : base;
+    ImGui::PushStyleColor(ImGuiCol_Button, selected);
+    ImGui::PushStyleColor(
+        ImGuiCol_ButtonHovered,
+        ImVec4(std::min(selected.x + 0.10f, 1.0f),
+               std::min(selected.y + 0.12f, 1.0f),
+               std::min(selected.z + 0.10f, 1.0f), 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,
+                          ImVec4(selected.x * 0.82f, selected.y * 0.82f,
+                                 selected.z * 0.82f, 1.0f));
+    if (ImGui::Button(kBladeNames[i], ImVec2(tab_width, 50.0f))) {
+      selected_blade_ = static_cast<int>(i);
+    }
+    ImGui::PopStyleColor(3);
+    if (i + 1 < kBladeCount) {
+      ImGui::SameLine(0.0f, tab_spacing);
+    }
+  }
+  ImGui::PopStyleVar();
+
+  ImGui::Spacing();
+  ImGui::Separator();
+  ImGui::Spacing();
+
+  const float content_height =
+      std::max(80.0f, window_size.y - ImGui::GetCursorPosY() - 70.0f);
+  ImGui::BeginChild("##dashboard_content", ImVec2(0.0f, content_height));
+
+  switch (selected_blade_) {
+    case 0: {
+      ImGui::TextColored(ImVec4(0.63f, 0.91f, 0.67f, 1.0f),
+                         "WELCOME TO XENIA");
+      ImGui::Spacing();
+      ImGui::TextWrapped(
+          "Play your Xbox 360 library with Xenia Canary. Choose a game file, "
+          "browse installed content, or jump back into a recent title.");
+      ImGui::Spacing();
+      ImGui::BeginDisabled(emulator_window_.emulator()->is_title_open());
+      if (ImGui::Button("Open a game file", ImVec2(230.0f, 48.0f))) {
+        EmulatorWindow* emulator_window = &emulator_window_;
+        emulator_window_.app_context().CallInUIThreadDeferred(
+            [emulator_window]() { emulator_window->FileOpen(); });
+      }
+      ImGui::EndDisabled();
+      ImGui::SameLine();
+      if (ImGui::Button("Browse installed content",
+                        ImVec2(250.0f, 48.0f))) {
+        emulator_window_.ToggleContentListDialog();
+      }
+      ImGui::Spacing();
+      ImGui::Spacing();
+      ImGui::TextUnformatted("RECENTLY PLAYED");
+      DrawRecentTitles();
+    } break;
+
+    case 1: {
+      ImGui::TextColored(ImVec4(0.63f, 0.91f, 0.67f, 1.0f), "GAMES");
+      ImGui::Spacing();
+      ImGui::TextWrapped(
+          "Launch a disc image or executable, or choose an installed Xbox 360 "
+          "title from your content library.");
+      ImGui::Spacing();
+      ImGui::BeginDisabled(emulator_window_.emulator()->is_title_open());
+      if (ImGui::Button("Open a game file", ImVec2(230.0f, 48.0f))) {
+        EmulatorWindow* emulator_window = &emulator_window_;
+        emulator_window_.app_context().CallInUIThreadDeferred(
+            [emulator_window]() { emulator_window->FileOpen(); });
+      }
+      ImGui::EndDisabled();
+      ImGui::SameLine();
+      if (ImGui::Button("Installed content", ImVec2(230.0f, 48.0f))) {
+        emulator_window_.ToggleContentListDialog();
+      }
+      ImGui::Spacing();
+      ImGui::Spacing();
+      ImGui::TextUnformatted("RECENTLY PLAYED");
+      DrawRecentTitles();
+    } break;
+
+    case 2: {
+      if (!mod_search_query_initialized_) {
+        mod_search_query_initialized_ = true;
+        const Emulator& emulator = *emulator_window_.emulator();
+        if (emulator.is_title_open()) {
+          const std::string initial_query =
+              fmt::format("{} {:08X}", emulator.title_name(),
+                          emulator.title_id());
+          const size_t query_length =
+              std::min(initial_query.size(), sizeof(mod_search_query_) - 1);
+          std::copy_n(initial_query.data(), query_length, mod_search_query_);
+          mod_search_query_[query_length] = '\0';
+        }
+      }
+
+      ImGui::TextColored(ImVec4(0.95f, 0.75f, 0.50f, 1.0f),
+                         "MODS & TEXTURE UPDATES");
+      ImGui::Spacing();
+      ImGui::TextWrapped(
+          "Search public Xbox 360 mod communities for any game in the "
+          "compatibility database. Enter a game title or its 8-digit Title "
+          "ID; the current game's name and ID are filled in when available.");
+      ImGui::Spacing();
+      ImGui::SetNextItemWidth(
+          std::min(560.0f, ImGui::GetContentRegionAvail().x));
+      ImGui::InputTextWithHint(
+          "##dashboard_mod_search",
+          "Game title or Title ID, e.g. Halo 3 or 4D5307E6",
+          mod_search_query_, sizeof(mod_search_query_));
+
+      const bool has_search_query = mod_search_query_[0] != '\0';
+      ImGui::BeginDisabled(!has_search_query);
+      if (ImGui::Button("Search mods", ImVec2(190.0f, 48.0f))) {
+        const std::string query =
+            fmt::format("site:gamebanana.com/mods \"{}\" Xbox 360 mods",
+                        mod_search_query_);
+        LaunchWebBrowser("https://www.google.com/search?q=" +
+                         UrlEncodeQuery(query));
+      }
+      ImGui::SameLine();
+      if (ImGui::Button("Search texture updates",
+                        ImVec2(230.0f, 48.0f))) {
+        const std::string query =
+            fmt::format("\"{}\" Xbox 360 (texture pack OR texture "
+                        "replacement OR HD textures)",
+                        mod_search_query_);
+        LaunchWebBrowser("https://www.google.com/search?q=" +
+                         UrlEncodeQuery(query));
+      }
+      ImGui::EndDisabled();
+
+      ImGui::Spacing();
+      ImGui::Spacing();
+      ImGui::TextUnformatted("XENIA DATABASES");
+      ImGui::BeginDisabled(!has_search_query);
+      if (ImGui::Button("Search Xenia game patches",
+                        ImVec2(250.0f, 42.0f))) {
+        const std::string encoded_game_query =
+            UrlEncodeQuery(mod_search_query_);
+        LaunchWebBrowser(
+            "https://github.com/xenia-canary/game-patches/search?q=" +
+            encoded_game_query + "&type=code");
+      }
+      ImGui::SameLine();
+      if (ImGui::Button("Search compatibility database",
+                        ImVec2(290.0f, 42.0f))) {
+        const std::string encoded_game_query =
+            UrlEncodeQuery(mod_search_query_);
+        LaunchWebBrowser(
+            "https://github.com/xenia-canary/game-compatibility/issues?q=" +
+            encoded_game_query);
+      }
+      ImGui::EndDisabled();
+      ImGui::Spacing();
+      ImGui::TextWrapped(
+          "Search results open in your browser. Xenia game patches are "
+          "separate from mods and texture packs; check each download's game "
+          "version and Title ID before installing.");
+    } break;
+
+    case 3: {
+      ImGui::TextColored(ImVec4(0.63f, 0.91f, 0.67f, 1.0f), "PROFILES");
+      ImGui::Spacing();
+      ImGui::TextWrapped(
+          "Manage local profiles and sign-in settings for Xbox 360 titles.");
+      ImGui::Spacing();
+      if (ImGui::Button("Manage profiles", ImVec2(230.0f, 48.0f))) {
+        emulator_window_.ToggleProfilesConfigDialog();
+      }
+    } break;
+
+    case 4: {
+      ImGui::TextColored(ImVec4(0.63f, 0.91f, 0.67f, 1.0f), "SYSTEM");
+      ImGui::Spacing();
+      ImGui::TextWrapped(
+          "Configure the emulated console, display processing, and window.");
+      ImGui::Spacing();
+      const float available_width = ImGui::GetContentRegionAvail().x;
+      const float button_width = std::min(230.0f, available_width);
+      const bool compact_layout = available_width < 706.0f;
+      if (ImGui::Button("Console settings", ImVec2(button_width, 48.0f))) {
+        emulator_window_.ToggleConsoleSettingsDialog();
+      }
+      if (!compact_layout) {
+        ImGui::SameLine();
+      }
+      if (ImGui::Button("Display settings", ImVec2(button_width, 48.0f))) {
+        emulator_window_.ToggleDisplayConfigDialog();
+      }
+      if (!compact_layout) {
+        ImGui::SameLine();
+      }
+      if (ImGui::Button("Toggle fullscreen", ImVec2(button_width, 48.0f))) {
+        emulator_window_.ToggleFullscreen();
+      }
+    } break;
+
+    case 5: {
+      ImGui::TextColored(ImVec4(0.63f, 0.91f, 0.67f, 1.0f), "HELP");
+      ImGui::Spacing();
+      ImGui::TextWrapped(
+          "Find compatibility information and help for using Xenia Canary.");
+      ImGui::Spacing();
+      if (ImGui::Button("Game compatibility", ImVec2(230.0f, 48.0f))) {
+        emulator_window_.ShowCompatibility();
+      }
+      ImGui::SameLine();
+      if (ImGui::Button("Xenia FAQ", ImVec2(230.0f, 48.0f))) {
+        emulator_window_.ShowFAQ();
+      }
+    } break;
+  }
+  ImGui::EndChild();
+
+  ImGui::SetCursorPosY(window_size.y - 74.0f);
+  ImGui::Separator();
+  ImGui::TextDisabled("F10  Dashboard     Ctrl+O  Open game");
+  ImGui::SameLine();
+  ImGui::SetCursorPosX(window_size.x - 215.0f);
+  if (ImGui::Button(emulator_window_.emulator()->is_title_open()
+                        ? "Resume game"
+                        : "Close dashboard",
+                    ImVec2(155.0f, 34.0f))) {
+    Close();
+  }
+
+  ImGui::End();
+  ImGui::PopStyleColor();
+  ImGui::PopStyleVar(4);
+}
+
+void EmulatorWindow::DashboardDialog::OnClose() {
+  if (emulator_window_.dashboard_dialog_.get() == this) {
+    emulator_window_.dashboard_dialog_.release();
+  }
 }
 
 }  // namespace app

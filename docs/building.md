@@ -149,3 +149,19 @@ Add the `export` lines to your shell profile to persist them across sessions.
 ## Running
 
 To make life easier you can set the program startup arguments in your IDE to something like `--log_file=stdout /path/to/Default.xex` to log to console rather than a file and start up the emulator right away.
+
+When Canarybird starts without a target file, it opens the Xbox 360-style
+dashboard.
+Use the **Games** blade to open an `.iso`, `.xex`, or `.zar` file or browse
+installed content; recent titles can be launched directly from the dashboard.
+Use the **Mods** blade to search any game by title or Title ID for community
+mods and texture updates, or search the Xenia game-patches and compatibility
+databases. These searches open in your browser; game patches are distinct from
+mods and texture packs.
+Press **F10** to open or close the dashboard while Xenia is running. Existing
+command-line target launches and the advanced menus remain available.
+
+Canarybird is a personal Windows distribution based on the latest Xenia Canary
+experimental source. Build it with `python xenia-build.py build
+--config=Release --target=xenia-app`; the executable is produced at
+`build\bin\Windows\Release\xenia_canary.exe`.

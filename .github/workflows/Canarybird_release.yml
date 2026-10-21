@@ -1,0 +1,55 @@
+name: Publish Canarybird Windows
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    name: Build Windows release
+    uses: ./.github/workflows/Windows_x86.yml
+
+  publish:
+    name: Publish GitHub release
+    needs: build-windows
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v8
+        with:
+          path: release_assets
+          merge-multiple: true
+
+      - name: Brand Windows archive
+        run: |-
+          SOURCE_ARCHIVE="release_assets/xenia_canary_windows.7z"
+          if [ ! -f "$SOURCE_ARCHIVE" ]; then
+            echo "::error::Windows build artifact was not found."
+            exit 1
+          fi
+          mv "$SOURCE_ARCHIVE" release_assets/canarybird_windows.7z
+
+      - name: Publish Canarybird release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |-
+          SHORT_SHA="${SOURCE_SHA::7}"
+          TAG="canarybird-${SHORT_SHA}"
+          NOTES="Canarybird Windows build based on Xenia Canary commit ${SOURCE_SHA}."
+          if gh release view "$TAG" --repo "$REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" --repo "$REPOSITORY" --clobber release_assets/*
+          else
+            gh release create "$TAG" \
+              --repo "$REPOSITORY" \
+              --target "$SOURCE_SHA" \
+              --title "Canarybird Windows ${SHORT_SHA}" \
+              --notes "$NOTES" \
+              release_assets/*
+          fi
