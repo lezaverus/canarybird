@@ -2717,9 +2717,8 @@ void EmulatorWindow::DashboardDialog::OnDraw(ImGuiIO&) {
         mod_search_query_initialized_ = true;
         const Emulator& emulator = *emulator_window_.emulator();
         if (emulator.is_title_open()) {
-          const std::string initial_query =
-              fmt::format("{} {:08X}", emulator.title_name(),
-                          emulator.title_id());
+          const std::string initial_query = fmt::format(
+              "{} {:08X}", emulator.title_name(), emulator.title_id());
           const size_t query_length =
               std::min(initial_query.size(), sizeof(mod_search_query_) - 1);
           std::copy_n(initial_query.data(), query_length, mod_search_query_);
@@ -2745,19 +2744,17 @@ void EmulatorWindow::DashboardDialog::OnDraw(ImGuiIO&) {
       const bool has_search_query = mod_search_query_[0] != '\0';
       ImGui::BeginDisabled(!has_search_query);
       if (ImGui::Button("Search mods", ImVec2(190.0f, 48.0f))) {
-        const std::string query =
-            fmt::format("site:gamebanana.com/mods \"{}\" Xbox 360 mods",
-                        mod_search_query_);
+        const std::string query = fmt::format(
+            "site:gamebanana.com/mods \"{}\" Xbox 360 mods", mod_search_query_);
         LaunchWebBrowser("https://www.google.com/search?q=" +
                          UrlEncodeQuery(query));
       }
       ImGui::SameLine();
-      if (ImGui::Button("Search texture updates",
-                        ImVec2(230.0f, 48.0f))) {
-        const std::string query =
-            fmt::format("\"{}\" Xbox 360 (texture pack OR texture "
-                        "replacement OR HD textures)",
-                        mod_search_query_);
+      if (ImGui::Button("Search texture updates", ImVec2(230.0f, 48.0f))) {
+        const std::string query = fmt::format(
+            "\"{}\" Xbox 360 (texture pack OR texture "
+            "replacement OR HD textures)",
+            mod_search_query_);
         LaunchWebBrowser("https://www.google.com/search?q=" +
                          UrlEncodeQuery(query));
       }
