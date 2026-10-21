@@ -176,8 +176,7 @@ std::string UrlEncodeQuery(std::string_view query) {
   std::string encoded;
   encoded.reserve(query.size() * 3);
   for (const char query_character : query) {
-    const unsigned char character =
-        static_cast<unsigned char>(query_character);
+    const unsigned char character = static_cast<unsigned char>(query_character);
     if ((character >= 'a' && character <= 'z') ||
         (character >= 'A' && character <= 'Z') ||
         (character >= '0' && character <= '9') || character == '-' ||
@@ -2559,12 +2558,9 @@ void EmulatorWindow::DashboardDialog::OnDraw(ImGuiIO&) {
   constexpr const char* kBladeNames[kBladeCount] = {
       "Home", "Games", "Mods", "Profiles", "System", "Help"};
   const ImVec4 kBladeColors[kBladeCount] = {
-      ImVec4(0.20f, 0.52f, 0.30f, 1.0f),
-      ImVec4(0.18f, 0.39f, 0.58f, 1.0f),
-      ImVec4(0.51f, 0.35f, 0.20f, 1.0f),
-      ImVec4(0.42f, 0.31f, 0.55f, 1.0f),
-      ImVec4(0.17f, 0.43f, 0.47f, 1.0f),
-      ImVec4(0.49f, 0.38f, 0.20f, 1.0f),
+      ImVec4(0.20f, 0.52f, 0.30f, 1.0f), ImVec4(0.18f, 0.39f, 0.58f, 1.0f),
+      ImVec4(0.51f, 0.35f, 0.20f, 1.0f), ImVec4(0.42f, 0.31f, 0.55f, 1.0f),
+      ImVec4(0.17f, 0.43f, 0.47f, 1.0f), ImVec4(0.49f, 0.38f, 0.20f, 1.0f),
   };
 
   const ImGuiViewport* viewport = ImGui::GetMainViewport();
@@ -2592,8 +2588,8 @@ void EmulatorWindow::DashboardDialog::OnDraw(ImGuiIO&) {
   const ImVec2 window_size = ImGui::GetWindowSize();
   ImDrawList* draw_list = ImGui::GetWindowDrawList();
   draw_list->AddRectFilledMultiColor(
-      window_pos, ImVec2(window_pos.x + window_size.x,
-                         window_pos.y + window_size.y),
+      window_pos,
+      ImVec2(window_pos.x + window_size.x, window_pos.y + window_size.y),
       IM_COL32(31, 52, 62, 255), IM_COL32(20, 37, 48, 255),
       IM_COL32(8, 14, 22, 255), IM_COL32(14, 23, 32, 255));
   draw_list->AddRectFilled(
@@ -2613,33 +2609,29 @@ void EmulatorWindow::DashboardDialog::OnDraw(ImGuiIO&) {
   ImGui::TextDisabled("XENIA CANARY  |  XBOX 360 DASHBOARD");
   ImGui::SetCursorPosX(window_size.x - 190.0f);
   ImGui::SetCursorPosY(29.0f);
-  ImGui::TextColored(ImVec4(0.58f, 0.88f, 0.63f, 1.0f),
-                     emulator_window_.emulator()->is_title_open()
-                         ? "GAME RUNNING"
-                         : "READY");
+  ImGui::TextColored(
+      ImVec4(0.58f, 0.88f, 0.63f, 1.0f),
+      emulator_window_.emulator()->is_title_open() ? "GAME RUNNING" : "READY");
 
   ImGui::SetCursorPos(ImVec2(0.0f, 101.0f));
   ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f, 13.0f));
   const float tab_spacing = 8.0f;
   constexpr float kBladeCountAsFloat = static_cast<float>(kBladeCount);
-  const float tab_width =
-      (ImGui::GetContentRegionAvail().x -
-       tab_spacing * (kBladeCountAsFloat - 1.0f)) /
-      kBladeCountAsFloat;
+  const float tab_width = (ImGui::GetContentRegionAvail().x -
+                           tab_spacing * (kBladeCountAsFloat - 1.0f)) /
+                          kBladeCountAsFloat;
   for (size_t i = 0; i < kBladeCount; ++i) {
     const ImVec4 base = kBladeColors[i];
-    const ImVec4 selected =
-        i == static_cast<size_t>(selected_blade_)
-            ? ImVec4(std::min(base.x + 0.16f, 1.0f),
-                     std::min(base.y + 0.20f, 1.0f),
-                     std::min(base.z + 0.16f, 1.0f), 1.0f)
-            : base;
+    const ImVec4 selected = i == static_cast<size_t>(selected_blade_)
+                                ? ImVec4(std::min(base.x + 0.16f, 1.0f),
+                                         std::min(base.y + 0.20f, 1.0f),
+                                         std::min(base.z + 0.16f, 1.0f), 1.0f)
+                                : base;
     ImGui::PushStyleColor(ImGuiCol_Button, selected);
-    ImGui::PushStyleColor(
-        ImGuiCol_ButtonHovered,
-        ImVec4(std::min(selected.x + 0.10f, 1.0f),
-               std::min(selected.y + 0.12f, 1.0f),
-               std::min(selected.z + 0.10f, 1.0f), 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                          ImVec4(std::min(selected.x + 0.10f, 1.0f),
+                                 std::min(selected.y + 0.12f, 1.0f),
+                                 std::min(selected.z + 0.10f, 1.0f), 1.0f));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive,
                           ImVec4(selected.x * 0.82f, selected.y * 0.82f,
                                  selected.z * 0.82f, 1.0f));
@@ -2663,8 +2655,7 @@ void EmulatorWindow::DashboardDialog::OnDraw(ImGuiIO&) {
 
   switch (selected_blade_) {
     case 0: {
-      ImGui::TextColored(ImVec4(0.63f, 0.91f, 0.67f, 1.0f),
-                         "WELCOME TO XENIA");
+      ImGui::TextColored(ImVec4(0.63f, 0.91f, 0.67f, 1.0f), "WELCOME TO XENIA");
       ImGui::Spacing();
       ImGui::TextWrapped(
           "Play your Xbox 360 library with Xenia Canary. Choose a game file, "
@@ -2678,8 +2669,7 @@ void EmulatorWindow::DashboardDialog::OnDraw(ImGuiIO&) {
       }
       ImGui::EndDisabled();
       ImGui::SameLine();
-      if (ImGui::Button("Browse installed content",
-                        ImVec2(250.0f, 48.0f))) {
+      if (ImGui::Button("Browse installed content", ImVec2(250.0f, 48.0f))) {
         emulator_window_.ToggleContentListDialog();
       }
       ImGui::Spacing();
@@ -2738,8 +2728,8 @@ void EmulatorWindow::DashboardDialog::OnDraw(ImGuiIO&) {
           std::min(560.0f, ImGui::GetContentRegionAvail().x));
       ImGui::InputTextWithHint(
           "##dashboard_mod_search",
-          "Game title or Title ID, e.g. Halo 3 or 4D5307E6",
-          mod_search_query_, sizeof(mod_search_query_));
+          "Game title or Title ID, e.g. Halo 3 or 4D5307E6", mod_search_query_,
+          sizeof(mod_search_query_));
 
       const bool has_search_query = mod_search_query_[0] != '\0';
       ImGui::BeginDisabled(!has_search_query);
@@ -2764,8 +2754,7 @@ void EmulatorWindow::DashboardDialog::OnDraw(ImGuiIO&) {
       ImGui::Spacing();
       ImGui::TextUnformatted("XENIA DATABASES");
       ImGui::BeginDisabled(!has_search_query);
-      if (ImGui::Button("Search Xenia game patches",
-                        ImVec2(250.0f, 42.0f))) {
+      if (ImGui::Button("Search Xenia game patches", ImVec2(250.0f, 42.0f))) {
         const std::string encoded_game_query =
             UrlEncodeQuery(mod_search_query_);
         LaunchWebBrowser(
